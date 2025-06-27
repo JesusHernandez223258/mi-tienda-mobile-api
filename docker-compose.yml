@@ -1,0 +1,26 @@
+# docker-compose.yml
+
+services:
+  mongodb:
+    image: mongo:8.0.10
+    container_name: mongo_dev
+    ports:
+      - '27017:27017'
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: devuser
+      MONGO_INITDB_ROOT_PASSWORD: devpass
+      MONGO_INITDB_DATABASE: tienda_admin_db
+    volumes:
+      - mongo_data_dev:/data/db
+
+volumes:
+  mongo_data_dev:
+    driver: local
+
+# To run this Docker Compose file, use the command:
+# docker compose up -d
+
+# MongoDB can be accessed at mongodb://devuser:devpass@localhost:27017/tienda_admin_db?authSource=admin
+
+#for off container
+# docker compose down

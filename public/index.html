@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Panel de Pruebas API Admin</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+  <div class="container">
+    <h1>Panel de Pruebas API Admin</h1>
+
+    <!-- SECCIÓN DE LOGIN -->
+    <div id="login-section">
+      <fieldset>
+        <legend>1. Autenticación</legend>
+        <form id="login-form">
+          <label for="email">Email:</label>
+          <input type="email" id="email" list="test-users" placeholder="Selecciona o escribe un email" required>
+          <datalist id="test-users"></datalist>
+
+          <label for="password">Contraseña:</label>
+          <input type="password" id="password" required>
+
+          <button type="submit">Login</button>
+        </form>
+      </fieldset>
+    </div>
+
+    <!-- PANEL DE ADMINISTRADOR (oculto por defecto) -->
+    <div id="admin-panel" class="hidden">
+      <div id="user-info"></div>
+      <button id="logout-btn">Cerrar Sesión</button>
+      <hr>
+
+      <!-- GESTIÓN DE PRODUCTOS -->
+      <fieldset>
+        <legend>2. Gestión de Productos</legend>
+
+        <!-- Listar Productos -->
+        <div class="endpoint-test">
+          <h4>Listar Productos (GET /api/v1/productos)</h4>
+          <form id="list-products-form">
+            <label for="page">Página:</label>
+            <input type="number" id="page" value="1" min="1">
+            <label for="limit">Límite:</label>
+            <input type="number" id="limit" value="5" min="1">
+            <button type="submit">Obtener Productos</button>
+          </form>
+        </div>
+
+        <!-- Crear Producto -->
+        <div class="endpoint-test">
+          <h4>Crear Producto (POST /api/v1/productos)</h4>
+          <form id="create-product-form">
+            <input type="text" id="create-nombre" placeholder="Nombre del producto" required>
+            <input type="text" id="create-descripcion" placeholder="Descripción" required>
+            <input type="number" id="create-precio" placeholder="Precio" step="0.01" required>
+            <input type="number" id="create-stock" placeholder="Stock" required>
+            <button type="submit">Crear Producto</button>
+          </form>
+        </div>
+
+        <!-- Gestionar un Producto Específico -->
+        <div class="endpoint-test">
+          <h4>Gestionar Producto por ID (GET, PUT, DELETE)</h4>
+          <input type="text" id="product-id" placeholder="Introduce el ID del producto aquí">
+          <button id="get-product-btn">Obtener</button>
+          <button id="delete-product-btn">Eliminar</button>
+
+          <form id="update-product-form">
+            <h4>Datos para Actualizar (PUT)</h4>
+            <input type="text" id="update-nombre" placeholder="Nuevo nombre">
+            <input type="text" id="update-descripcion" placeholder="Nueva descripción">
+            <input type="number" id="update-precio" placeholder="Nuevo precio" step="0.01">
+            <input type="number" id="update-stock" placeholder="Nuevo stock">
+            <button type="submit">Actualizar Producto</button>
+          </form>
+        </div>
+      </fieldset>
+    </div>
+
+    <!-- ÁREA DE RESULTADOS -->
+    <fieldset>
+      <legend>Resultados de la API</legend>
+      <pre id="api-result">Aquí se mostrarán las respuestas de la API...</pre>
+    </fieldset>
+
+  </div>
+  <script src="script.js"></script>
+</body>
+
+</html>

@@ -1,0 +1,467 @@
+
+--- ./scripts/seedAdmin.js ---
+// scripts/seedAdmin.js
+const mongoose = require("mongoose");
+const bcrypt = require("bcryptjs");
+const Usuario = require("../src/models/usuario.model");
+require("dotenv").config({ path: ".env" }); // Asegúrate que la ruta al .env sea correcta
+
+const seedAdmin = async () => {
+  try {
+    await mongoose.connect(process.env.MONGO_URI);
+
+    const adminEmail = "admin@tienda.com";
+    const adminExists = await Usuario.findOne({ email: adminEmail });
+
+    if (adminExists) {
+      console.log("El usuario administrador ya existe.");
+      return;
+    }
+
+    const admin = new Usuario({
+      email: adminEmail,
+      password: "test1234", // Cambia esto
+      role: "admin",
+    });
+
+    await admin.save();
+    console.log("Usuario administrador creado exitosamente.");
+  } catch (error) {
+    console.error("Error creando el usuario administrador:", error);
+  } finally {
+    mongoose.connection.close();
+  }
+};
+
+seedAdmin();
+
+--- ./src/app.js ---
+const express = require("express");
+const mongoose = require("mongoose");
+const cors = require("cors");
+require("dotenv").config(); // Carga las variables de .env
+
+const authRoutes = require("./routes/auth.routes");
+const productoRoutes = require("./routes/producto.routes");
+// const clienteRoutes = require('./routes/cliente.routes'); // Opcional
+// const pedidoRoutes = require('./routes/pedido.routes');   // Opcional
+const errorHandler = require("./middlewares/errorHandler.middleware");
+
+const app = express();
+
+// Middlewares básicos
+app.use(cors());
+app.use(express.json());
+
+// Conexión a la base de datos
+mongoose
+  .connect(process.env.MONGO_URI)
+  .then(() => console.log("MongoDB conectado exitosamente."))
+  .catch((err) => console.error("Error al conectar a MongoDB:", err));
+
+// Rutas de la API
+app.use("/api/v1/auth", authRoutes);
+app.use("/api/v1/productos", productoRoutes);
+// app.use('/api/v1/clientes', clienteRoutes);
+// app.use('/api/v1/pedidos', pedidoRoutes);
+
+// Middleware de manejo de errores (debe ser el último)
+app.use(errorHandler);
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Servidor corriendo en el puerto ${PORT}`);
+});
+
+--- ./src/controllers/auth.controller.js ---
+const authService = require("../services/auth.service");
+const { validationResult } = require("express-validator");
+
+exports.login = async (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ errors: errors.array() });
+  }
+
+  try {
+    const { email, password } = req.body;
+    const data = await authService.loginUser(email, password);
+    res.json(data);
+  } catch (error) {
+    next(error); // Pasa el error al middleware de errores
+  }
+};
+
+--- ./src/controllers/producto.controller.js ---
+const productoService = require("../services/producto.service");
+const { validationResult } = require("express-validator");
+
+const handleValidationErrors = (req, res) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    res.status(400).json({ errors: errors.array() });
+    return true;
+  }
+  return false;
+};
+
+exports.createProduct = async (req, res, next) => {
+  if (handleValidationErrors(req, res)) return;
+  try {
+    const product = await productoService.createProduct(req.body);
+    res.status(201).json({ message: "Producto creado exitosamente", product });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.getAllProducts = async (req, res, next) => {
+  try {
+    const products = await productoService.getAllProducts();
+    res.status(200).json(products);
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.getAllProducts = async (req, res, next) => {
+  try {
+    // Leer page y limit de los query params, con valores por defecto
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+
+    const result = await productoService.getAllProducts(page, limit);
+    res.status(200).json(result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.getProductById = async (req, res, next) => {
+  try {
+    const product = await productoService.getProductById(req.params.id);
+    if (!product) {
+      return res.status(404).json({ message: "Producto no encontrado" });
+    }
+    res.status(200).json(product);
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.updateProduct = async (req, res, next) => {
+  if (handleValidationErrors(req, res)) return;
+  try {
+    const updatedProduct = await productoService.updateProduct(
+      req.params.id,
+      req.body
+    );
+    if (!updatedProduct) {
+      return res.status(404).json({ message: "Producto no encontrado" });
+    }
+    res
+      .status(200)
+      .json({
+        message: "Producto actualizado exitosamente",
+        product: updatedProduct,
+      });
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.deleteProduct = async (req, res, next) => {
+  try {
+    const deletedProduct = await productoService.deleteProduct(req.params.id);
+    if (!deletedProduct) {
+      return res.status(404).json({ message: "Producto no encontrado" });
+    }
+    res.status(200).json({ message: "Producto eliminado exitosamente" });
+  } catch (error) {
+    next(error);
+  }
+};
+
+--- ./src/middlewares/errorHandler.middleware.js ---
+const errorHandler = (err, req, res, next) => {
+  console.error(err.stack);
+
+  const statusCode = err.statusCode || 500;
+  const message = err.message || "Ha ocurrido un error interno en el servidor";
+
+  res.status(statusCode).json({
+    error: {
+      message: message,
+    },
+  });
+};
+
+module.exports = errorHandler;
+
+--- ./src/middlewares/jwt.middleware.js ---
+const jwt = require("jsonwebtoken");
+const Usuario = require("../models/usuario.model");
+
+const verifyToken = async (req, res, next) => {
+  let token;
+  const authHeader = req.headers.authorization;
+
+  if (authHeader && authHeader.startsWith("Bearer")) {
+    try {
+      // Extraer el token del header
+      token = authHeader.split(" ")[1];
+
+      // Verificar el token
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+      // Adjuntar el usuario (sin la contraseña) al request
+      req.user = await Usuario.findById(decoded.id).select("-password");
+
+      if (!req.user) {
+        return res.status(401).json({ message: "Usuario no encontrado" });
+      }
+
+      next();
+    } catch (error) {
+      return res.status(401).json({ message: "Token no válido o expirado" });
+    }
+  }
+
+  if (!token) {
+    return res
+      .status(401)
+      .json({ message: "No autorizado, token no encontrado" });
+  }
+};
+
+module.exports = verifyToken;
+
+--- ./src/middlewares/role.middleware.js ---
+const checkAdmin = (req, res, next) => {
+  // Este middleware se ejecuta DESPUÉS de verifyToken
+  if (req.user && req.user.role === "admin") {
+    next();
+  } else {
+    res
+      .status(403)
+      .json({ message: "Acceso denegado. Se requiere rol de administrador." });
+  }
+};
+
+module.exports = checkAdmin;
+
+--- ./src/models/producto.model.js ---
+const mongoose = require("mongoose");
+
+const ProductoSchema = new mongoose.Schema(
+  {
+    nombre: {
+      type: String,
+      required: [true, "El nombre es obligatorio"],
+      trim: true,
+    },
+    descripcion: {
+      type: String,
+      required: [true, "La descripción es obligatoria"],
+    },
+    precio: {
+      type: Number,
+      required: [true, "El precio es obligatorio"],
+      min: [0, "El precio no puede ser negativo"],
+    },
+    stock: {
+      type: Number,
+      required: [true, "El stock es obligatorio"],
+      min: [0, "El stock no puede ser negativo"],
+      default: 0,
+    },
+    // Opcional: una categoría o imagen
+    categoria: {
+      type: String,
+      trim: true,
+    },
+    imagenUrl: {
+      type: String,
+    },
+  },
+  { timestamps: true }
+);
+
+module.exports = mongoose.model("Producto", ProductoSchema);
+
+--- ./src/models/usuario.model.js ---
+const mongoose = require("mongoose");
+const bcrypt = require("bcryptjs");
+
+const UsuarioSchema = new mongoose.Schema(
+  {
+    email: {
+      type: String,
+      required: [true, "El email es obligatorio"],
+      unique: true,
+      lowercase: true,
+      trim: true,
+    },
+    password: {
+      type: String,
+      required: [true, "La contraseña es obligatoria"],
+      minlength: 6,
+    },
+    role: {
+      type: String,
+      enum: ["admin", "cliente"], // Aunque solo usaremos admin, es buena práctica definir roles
+      default: "cliente",
+    },
+  },
+  { timestamps: true }
+);
+
+// Hook para hashear la contraseña antes de guardarla
+UsuarioSchema.pre("save", async function (next) {
+  if (!this.isModified("password")) {
+    return next();
+  }
+  const salt = await bcrypt.genSalt(10);
+  this.password = await bcrypt.hash(this.password, salt);
+  next();
+});
+
+// Método para comparar contraseñas
+UsuarioSchema.methods.comparePassword = async function (candidatePassword) {
+  return await bcrypt.compare(candidatePassword, this.password);
+};
+
+module.exports = mongoose.model("Usuario", UsuarioSchema);
+
+
+--- ./src/routes/auth.routes.js ---
+const express = require("express");
+const router = express.Router();
+const { login } = require("../controllers/auth.controller");
+const { validateLogin } = require("../validators/auth.validator");
+
+// POST /api/v1/auth/login
+router.post("/login", validateLogin, login);
+
+// NOTA: Para crear el primer admin, puedes crear un script aparte o una ruta protegida especial.
+// router.post('/register-admin', registerAdmin); // Ejemplo
+
+module.exports = router;
+
+--- ./src/routes/producto.routes.js ---
+const express = require("express");
+const router = express.Router();
+const productoController = require("../controllers/producto.controller");
+const verifyToken = require("../middlewares/jwt.middleware");
+const checkAdmin = require("../middlewares/role.middleware");
+const { validateProduct } = require("../validators/producto.validator");
+
+// Todas las rutas de productos requieren token y rol de admin
+router.use(verifyToken, checkAdmin);
+
+router
+  .route("/")
+  .get(productoController.getAllProducts)
+  .post(validateProduct, productoController.createProduct);
+
+router
+  .route("/:id")
+  .get(productoController.getProductById)
+  .put(validateProduct, productoController.updateProduct)
+  .delete(productoController.deleteProduct);
+
+module.exports = router;
+
+--- ./src/services/auth.service.js ---
+const Usuario = require("../models/usuario.model");
+const jwt = require("jsonwebtoken");
+
+exports.loginUser = async (email, password) => {
+  const user = await Usuario.findOne({ email });
+  if (!user) {
+    const error = new Error("Credenciales inválidas");
+    error.statusCode = 401;
+    throw error;
+  }
+
+  const isMatch = await user.comparePassword(password);
+  if (!isMatch) {
+    const error = new Error("Credenciales inválidas");
+    error.statusCode = 401;
+    throw error;
+  }
+
+  // Si las credenciales son correctas, generamos el token
+  const token = jwt.sign(
+    { id: user._id, role: user.role },
+    process.env.JWT_SECRET,
+    { expiresIn: process.env.JWT_EXPIRES_IN }
+  );
+
+  return {
+    token,
+    user: {
+      id: user._id,
+      email: user.email,
+      role: user.role,
+    },
+  };
+};
+
+--- ./src/services/producto.service.js ---
+const Producto = require("../models/producto.model");
+
+exports.createProduct = async (productData) => {
+  const newProduct = new Producto(productData);
+  return await newProduct.save();
+};
+
+exports.getAllProducts = async (page, limit) => {
+  const skip = (page - 1) * limit;
+
+  const products = await Producto.find().skip(skip).limit(limit);
+  const totalProducts = await Producto.countDocuments();
+
+  return {
+    products,
+    totalPages: Math.ceil(totalProducts / limit),
+    currentPage: page,
+  };
+};
+
+exports.getProductById = async (id) => {
+  return await Producto.findById(id);
+};
+
+exports.updateProduct = async (id, updateData) => {
+  return await Producto.findByIdAndUpdate(id, updateData, {
+    new: true,
+    runValidators: true,
+  });
+};
+
+exports.deleteProduct = async (id) => {
+  return await Producto.findByIdAndDelete(id);
+};
+
+--- ./src/validators/auth.validator.js ---
+const { body } = require("express-validator");
+
+exports.validateLogin = [
+  body("email").isEmail().withMessage("Debe ser un email válido"),
+  body("password").notEmpty().withMessage("La contraseña no puede estar vacía"),
+];
+
+--- ./src/validators/producto.validator.js ---
+const { body } = require("express-validator");
+
+exports.validateProduct = [
+  body("nombre").notEmpty().withMessage("El nombre es requerido"),
+  body("descripcion").notEmpty().withMessage("La descripción es requerida"),
+  body("precio")
+    .isFloat({ gt: 0 })
+    .withMessage("El precio debe ser un número positivo"),
+  body("stock")
+    .isInt({ min: 0 })
+    .withMessage("El stock debe ser un número entero no negativo"),
+];
