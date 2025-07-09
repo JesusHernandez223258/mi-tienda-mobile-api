@@ -54,11 +54,14 @@
         <!-- Crear Producto -->
         <div class="endpoint-test">
           <h4>Crear Producto (POST /api/v1/productos)</h4>
-          <form id="create-product-form">
-            <input type="text" id="create-nombre" placeholder="Nombre del producto" required>
-            <input type="text" id="create-descripcion" placeholder="Descripción" required>
-            <input type="number" id="create-precio" placeholder="Precio" step="0.01" required>
-            <input type="number" id="create-stock" placeholder="Stock" required>
+          <form id="create-product-form" enctype="multipart/form-data">
+            <input type="text" id="create-nombre" name="nombre" placeholder="Nombre del producto" required>
+            <input type="text" id="create-descripcion" name="descripcion" placeholder="Descripción" required>
+            <input type="number" id="create-precio" name="precio" placeholder="Precio" step="0.01" required>
+            <input type="number" id="create-stock" name="stock" placeholder="Stock" required>
+            <!-- CAMBIO: Campo para la imagen -->
+            <label for="create-imagen">Imagen:</label>
+            <input type="file" id="create-imagen" name="imagen" accept="image/*">
             <button type="submit">Crear Producto</button>
           </form>
         </div>
@@ -70,12 +73,15 @@
           <button id="get-product-btn">Obtener</button>
           <button id="delete-product-btn">Eliminar</button>
 
-          <form id="update-product-form">
+          <form id="update-product-form" enctype="multipart/form-data">
             <h4>Datos para Actualizar (PUT)</h4>
-            <input type="text" id="update-nombre" placeholder="Nuevo nombre">
-            <input type="text" id="update-descripcion" placeholder="Nueva descripción">
-            <input type="number" id="update-precio" placeholder="Nuevo precio" step="0.01">
-            <input type="number" id="update-stock" placeholder="Nuevo stock">
+            <input type="text" id="update-nombre" name="nombre" placeholder="Nuevo nombre">
+            <input type="text" id="update-descripcion" name="descripcion" placeholder="Nueva descripción">
+            <input type="number" id="update-precio" name="precio" placeholder="Nuevo precio" step="0.01">
+            <input type="number" id="update-stock" name="stock" placeholder="Nuevo stock">
+            <!-- CAMBIO: Campo para actualizar la imagen -->
+            <label for="update-imagen">Nueva Imagen (opcional):</label>
+            <input type="file" id="update-imagen" name="imagen" accept="image/*">
             <button type="submit">Actualizar Producto</button>
           </form>
         </div>

@@ -15,7 +15,12 @@ const app = express();
 app.use(cors());
 app.use(express.json());
 
+// Servir la UI de pruebas desde la carpeta 'public'
 app.use(express.static("public"));
+
+// CAMBIO: Servir imágenes desde la carpeta 'public/uploads'
+// Esto hace que la URL http://localhost:3000/uploads/nombre_archivo.jpg funcione
+app.use("/uploads", express.static("public/uploads"));
 
 // Conexión a la base de datos
 mongoose

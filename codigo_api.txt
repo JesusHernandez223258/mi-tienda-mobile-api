@@ -1,0 +1,999 @@
+=== ./docker-compose.yml ===
+# docker-compose.yml
+
+services:
+  mongodb:
+    image: mongo:8.0.10
+    container_name: mongo_dev
+    ports:
+      - '27017:27017'
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: devuser
+      MONGO_INITDB_ROOT_PASSWORD: devpass
+      MONGO_INITDB_DATABASE: tienda_admin_db
+    volumes:
+      - mongo_data_dev:/data/db
+
+volumes:
+  mongo_data_dev:
+    driver: local
+
+# To run this Docker Compose file, use the command:
+# docker compose up -d
+
+# MongoDB can be accessed at mongodb://devuser:devpass@localhost:27017/tienda_admin_db?authSource=admin
+
+#for off container
+# docker compose down
+=== ./public/script.js ===
+// public/script.js
+
+document.addEventListener("DOMContentLoaded", () => {
+  // ---- ESTADO Y USUARIOS DE PRUEBA ----
+  let authToken = null;
+  const testUsers = [
+    { email: "admin@tienda.com", password: "test1234" },
+    { email: "noadmin@tienda.com", password: "password1" },
+    { email: "bloqueado@tienda.com", password: "password2" },
+    { email: "otro@test.com", password: "password3" },
+  ];
+
+  // ---- REFERENCIAS A ELEMENTOS DEL DOM ----
+  const loginSection = document.getElementById("login-section");
+  const adminPanel = document.getElementById("admin-panel");
+  const apiResult = document.getElementById("api-result");
+
+  // Formularios y botones
+  const loginForm = document.getElementById("login-form");
+  const logoutBtn = document.getElementById("logout-btn");
+  const listProductsForm = document.getElementById("list-products-form");
+  const createProductForm = document.getElementById("create-product-form");
+  const updateProductForm = document.getElementById("update-product-form");
+  const getProductBtn = document.getElementById("get-product-btn");
+  const deleteProductBtn = document.getElementById("delete-product-btn");
+
+  // ---- INICIALIZACIÓN ----
+  const datalist = document.getElementById("test-users");
+  testUsers.forEach((user) => {
+    const option = document.createElement("option");
+    option.value = user.email;
+    datalist.appendChild(option);
+  });
+
+  document.getElementById("email").addEventListener("input", (e) => {
+    const user = testUsers.find((u) => u.email === e.target.value);
+    if (user) {
+      document.getElementById("password").value = user.password;
+    }
+  });
+
+  // ---- FUNCIÓN HELPER PARA LLAMADAS A LA API ----
+  const apiCall = async (endpoint, method = "GET", body = null) => {
+    const options = {
+      method,
+      headers: {}, // Headers se manejan dinámicamente
+    };
+    if (authToken) {
+      options.headers["Authorization"] = `Bearer ${authToken}`;
+    }
+
+    // Detectar si el body es FormData
+    if (body instanceof FormData) {
+      options.body = body;
+      // NO establecer 'Content-Type', el navegador lo hace automáticamente
+    } else if (body) {
+      options.headers["Content-Type"] = "application/json";
+      options.body = JSON.stringify(body);
+    }
+
+    try {
+      const response = await fetch(endpoint, options);
+      const data = await response.json();
+      apiResult.textContent = JSON.stringify(data, null, 2);
+      return { ok: response.ok, data };
+    } catch (error) {
+      apiResult.textContent = `Error de red: ${error.message}`;
+      return { ok: false, data: { message: error.message } };
+    }
+  };
+
+  // ---- LÓGICA DE UI ----
+  const updateUI = (isLoggedIn) => {
+    if (isLoggedIn) {
+      loginSection.classList.add("hidden");
+      adminPanel.classList.remove("hidden");
+    } else {
+      loginSection.classList.remove("hidden");
+      adminPanel.classList.add("hidden");
+      authToken = null;
+      document.getElementById("user-info").innerHTML = "";
+      apiResult.textContent = "Desconectado. Inicia sesión para probar la API.";
+    }
+  };
+
+  // ---- MANEJADORES DE EVENTOS ----
+
+  // Login
+  loginForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const email = document.getElementById("email").value;
+    const password = document.getElementById("password").value;
+    const { ok, data } = await apiCall("/api/v1/auth/login", "POST", {
+      email,
+      password,
+    });
+
+    // CORRECCIÓN: Comprobar que 'data.data' y 'data.data.token' existan.
+    if (ok && data && data.data && data.data.token) {
+      authToken = data.data.token;
+      document.getElementById("user-info").innerHTML = `
+            <p><strong>Usuario:</strong> ${data.data.user.email}</p>
+            <p><strong>Rol:</strong> ${data.data.user.role}</p>
+            <p><strong>Token:</strong> <span style="font-size: 12px; word-break: break-all;">${authToken.substring(
+              0,
+              40
+            )}...</span></p>
+        `;
+      updateUI(true);
+    } else {
+      updateUI(false);
+    }
+  });
+
+  // Logout
+  logoutBtn.addEventListener("click", () => updateUI(false));
+
+  // Listar productos
+  listProductsForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const page = document.getElementById("page").value;
+    const limit = document.getElementById("limit").value;
+    await apiCall(`/api/v1/productos?page=${page}&limit=${limit}`);
+  });
+
+  // Crear producto
+  createProductForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const formData = new FormData(createProductForm); // Usamos FormData
+    await apiCall("/api/v1/productos", "POST", formData);
+    createProductForm.reset();
+  });
+
+  // Obtener producto por ID (y autocompletar)
+  getProductBtn.addEventListener("click", async () => {
+    const id = document.getElementById("product-id").value;
+    if (!id) {
+      apiResult.textContent = "Por favor, introduce un ID de producto.";
+      return;
+    }
+    const { ok, data } = await apiCall(`/api/v1/productos/${id}`);
+    if (ok) {
+      // La data ahora está en data.data
+      const product = data.data;
+      document.querySelector(
+        '#update-product-form input[name="nombre"]'
+      ).value = product.nombre;
+      document.querySelector(
+        '#update-product-form input[name="descripcion"]'
+      ).value = product.descripcion;
+      document.querySelector(
+        '#update-product-form input[name="precio"]'
+      ).value = product.precio;
+      document.querySelector('#update-product-form input[name="stock"]').value =
+        product.stock;
+    }
+  });
+
+  // Actualizar producto
+  updateProductForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const id = document.getElementById("product-id").value;
+    if (!id) {
+      apiResult.textContent =
+        "Introduce un ID para poder actualizar el producto.";
+      return;
+    }
+    const formData = new FormData(updateProductForm);
+    await apiCall(`/api/v1/productos/${id}`, "PUT", formData);
+  });
+
+  // Eliminar producto
+  deleteProductBtn.addEventListener("click", async () => {
+    const id = document.getElementById("product-id").value;
+    if (!id) {
+      apiResult.textContent = "Por favor, introduce un ID de producto.";
+      return;
+    }
+    if (
+      confirm(
+        `¿Estás seguro de que quieres eliminar el producto con ID: ${id}?`
+      )
+    ) {
+      await apiCall(`/api/v1/productos/${id}`, "DELETE");
+    }
+  });
+
+  // Estado inicial
+  updateUI(false);
+});
+
+=== ./scripts/seedAdmin.js ===
+const mongoose = require("mongoose");
+const Usuario = require("../src/models/usuario.model");
+require("dotenv").config(); // No necesitas path si .env está en la raíz
+
+/**
+ * Script para crear un usuario administrador si no existe.
+ * Se conecta a la base de datos, verifica la existencia del admin,
+ * lo crea si es necesario y luego cierra la conexión.
+ */
+const seedAdmin = async () => {
+  // 1. Validar que la URI de MongoDB esté configurada
+  if (!process.env.MONGO_URI) {
+    console.error("Error: La variable de entorno MONGO_URI no está definida.");
+    console.log(
+      "Asegúrate de tener un archivo .env en la raíz del proyecto con la configuración necesaria."
+    );
+    process.exit(1); // Salir del script con un código de error
+  }
+
+  try {
+    // 2. Conectar a la base de datos
+    console.log("Conectando a la base de datos...");
+    await mongoose.connect(process.env.MONGO_URI);
+    console.log("Conexión exitosa.");
+
+    // 3. Definir los datos del administrador
+    const adminData = {
+      email: "admin@tienda.com",
+      password: "test1234", // Usa la misma contraseña que en tus pruebas de UI para consistencia
+      role: "admin",
+    };
+
+    // 4. Verificar si el administrador ya existe
+    const adminExists = await Usuario.findOne({ email: adminData.email });
+
+    if (adminExists) {
+      console.log(
+        `El usuario administrador con email '${adminData.email}' ya existe.`
+      );
+      return; // No hacer nada más
+    }
+
+    // 5. Si no existe, crear el nuevo usuario
+    console.log(
+      `Creando usuario administrador con email '${adminData.email}'...`
+    );
+    // Mongoose se encargará de hashear la contraseña gracias al hook 'pre-save' en el modelo
+    const admin = new Usuario(adminData);
+    await admin.save();
+
+    console.log("✅ ¡Usuario administrador creado exitosamente!");
+  } catch (error) {
+    // 6. Manejar errores de conexión o guardado
+    console.error(
+      "❌ Error durante la ejecución del script de seeding:",
+      error
+    );
+    process.exit(1);
+  } finally {
+    // 7. Asegurar que la conexión siempre se cierre
+    console.log("Cerrando la conexión a la base de datos...");
+    await mongoose.connection.close();
+    console.log("Conexión cerrada.");
+  }
+};
+
+// Ejecutar la función principal
+seedAdmin();
+
+=== ./src/app.js ===
+const express = require("express");
+const mongoose = require("mongoose");
+const cors = require("cors");
+require("dotenv").config(); // Carga las variables de .env
+
+const authRoutes = require("./routes/auth.routes");
+const productoRoutes = require("./routes/producto.routes");
+// const clienteRoutes = require('./routes/cliente.routes'); // Opcional
+// const pedidoRoutes = require('./routes/pedido.routes');   // Opcional
+const errorHandler = require("./middlewares/errorHandler.middleware");
+
+const app = express();
+
+// Middlewares básicos
+app.use(cors());
+app.use(express.json());
+
+// Servir la UI de pruebas desde la carpeta 'public'
+app.use(express.static("public"));
+
+// CAMBIO: Servir imágenes desde la carpeta 'public/uploads'
+// Esto hace que la URL http://localhost:3000/uploads/nombre_archivo.jpg funcione
+app.use("/uploads", express.static("public/uploads"));
+
+// Conexión a la base de datos
+mongoose
+  .connect(process.env.MONGO_URI)
+  .then(() => console.log("MongoDB conectado exitosamente."))
+  .catch((err) => console.error("Error al conectar a MongoDB:", err));
+
+// Rutas de la API
+app.use("/api/v1/auth", authRoutes);
+app.use("/api/v1/productos", productoRoutes);
+// app.use('/api/v1/clientes', clienteRoutes);
+// app.use('/api/v1/pedidos', pedidoRoutes);
+
+// Middleware de manejo de errores (debe ser el último)
+app.use(errorHandler);
+
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`Servidor corriendo en el puerto ${PORT}`);
+});
+
+=== ./src/controllers/auth.controller.js ===
+const authService = require("../services/auth.service");
+const { validationResult } = require("express-validator");
+const { jsonResponse } = require("../utils/response.handler");
+const ApiError = require("../utils/ApiError");
+
+exports.login = async (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return next(new ApiError(400, "Error de validación", errors.array()));
+  }
+
+  try {
+    const { email, password } = req.body;
+    const { token, user } = await authService.loginUser(email, password);
+
+    // CAMBIO: Usamos nuestro manejador de respuestas
+    // y enviamos el token en el cuerpo para facilitar la prueba en la UI
+    jsonResponse(res, 200, { token, user }, "Login exitoso");
+  } catch (error) {
+    next(error);
+  }
+};
+
+=== ./src/controllers/producto.controller.js ===
+const productoService = require("../services/producto.service");
+const { validationResult } = require("express-validator");
+const { jsonResponse } = require("../utils/response.handler");
+const ApiError = require("../utils/ApiError");
+
+exports.createProduct = async (req, res, next) => {
+  try {
+    // YA NO ES NECESARIO VALIDAR AQUÍ. Si llega aquí, es porque los datos son válidos.
+    const productData = { ...req.body };
+    if (req.file) {
+      // Usar la IP del host de la petición, no 'localhost'
+      const host = req.get("host");
+      productData.imagenUrl = `${req.protocol}://${host}/uploads/${req.file.filename}`;
+    }
+    const product = await productoService.createProduct(productData);
+    jsonResponse(res, 201, product, "Producto creado exitosamente");
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.getAllProducts = async (req, res, next) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const result = await productoService.getAllProducts(page, limit);
+    jsonResponse(res, 200, result);
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.getProductById = async (req, res, next) => {
+  try {
+    const product = await productoService.getProductById(req.params.id);
+    jsonResponse(res, 200, product);
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.updateProduct = async (req, res, next) => {
+  try {
+    // YA NO ES NECESARIO VALIDAR AQUÍ. Si llega aquí, es porque los datos son válidos.
+    const updateData = { ...req.body };
+    if (req.file) {
+      const host = req.get("host");
+      updateData.imagenUrl = `${req.protocol}://${host}/uploads/${req.file.filename}`;
+    }
+    const updatedProduct = await productoService.updateProduct(
+      req.params.id,
+      updateData
+    );
+    jsonResponse(res, 200, updatedProduct, "Producto actualizado exitosamente");
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.deleteProduct = async (req, res, next) => {
+  try {
+    await productoService.deleteProduct(req.params.id);
+    jsonResponse(res, 200, null, "Producto eliminado exitosamente");
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.syncProducts = async (req, res, next) => {
+  try {
+    // El body debería ser un array de productos: { "products": [...] }
+    const { products } = req.body;
+
+    if (!Array.isArray(products)) {
+      throw new ApiError(
+        400,
+        "El cuerpo de la petición debe contener un array de 'products'."
+      );
+    }
+
+    const results = await productoService.syncProducts(products);
+    jsonResponse(res, 200, results, "Sincronización completada.");
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.getAllProductsForSync = async (req, res, next) => {
+  try {
+    const products = await productoService.getAllProductsForSync();
+    jsonResponse(res, 200, products);
+  } catch (error) {
+    next(error);
+  }
+};
+
+
+=== ./src/middlewares/errorHandler.middleware.js ===
+// src/middlewares/errorHandler.middleware.js
+
+const { errorResponse } = require("../utils/response.handler");
+const ApiError = require("../utils/ApiError");
+
+const errorHandler = (err, req, res, next) => {
+  console.error(err); // Es bueno loguear el error completo
+
+  if (err instanceof ApiError) {
+    // CAMBIO: Pasamos el array de errores a la respuesta
+    return errorResponse(res, err.statusCode, err.message, err.errors);
+  }
+
+  if (
+    err.code === "LIMIT_FILE_SIZE" ||
+    (err.message &&
+      err.message.includes("El tipo de archivo no está permitido"))
+  ) {
+    return errorResponse(res, 400, err.message);
+  }
+
+  errorResponse(res, 500, "Ha ocurrido un error interno en el servidor.");
+};
+
+module.exports = errorHandler;
+
+=== ./src/middlewares/jwt.middleware.js ===
+const jwt = require("jsonwebtoken");
+const Usuario = require("../models/usuario.model");
+
+const verifyToken = async (req, res, next) => {
+  let token;
+  const authHeader = req.headers.authorization;
+
+  if (authHeader && authHeader.startsWith("Bearer")) {
+    try {
+      // Extraer el token del header
+      token = authHeader.split(" ")[1];
+
+      // Verificar el token
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+      // Adjuntar el usuario (sin la contraseña) al request
+      req.user = await Usuario.findById(decoded.id).select("-password");
+
+      if (!req.user) {
+        return res.status(401).json({ message: "Usuario no encontrado" });
+      }
+
+      next();
+    } catch (error) {
+      return res.status(401).json({ message: "Token no válido o expirado" });
+    }
+  }
+
+  if (!token) {
+    return res
+      .status(401)
+      .json({ message: "No autorizado, token no encontrado" });
+  }
+};
+
+module.exports = verifyToken;
+
+=== ./src/middlewares/role.middleware.js ===
+const checkAdmin = (req, res, next) => {
+  // Este middleware se ejecuta DESPUÉS de verifyToken
+  if (req.user && req.user.role === "admin") {
+    next();
+  } else {
+    res
+      .status(403)
+      .json({ message: "Acceso denegado. Se requiere rol de administrador." });
+  }
+};
+
+module.exports = checkAdmin;
+
+=== ./src/middlewares/upload.middleware.js ===
+// src/middlewares/upload.middleware.js
+const multer = require("multer");
+const path = require("path");
+
+// Definir dónde se guardarán los archivos
+const storage = multer.diskStorage({
+  destination: function (req, file, cb) {
+    cb(null, "public/uploads/"); // La carpeta donde se guardan las imágenes
+  },
+  filename: function (req, file, cb) {
+    // Crear un nombre de archivo único para evitar colisiones
+    const uniqueSuffix = Date.now() + "-" + Math.round(Math.random() * 1e9);
+    cb(
+      null,
+      file.fieldname + "-" + uniqueSuffix + path.extname(file.originalname)
+    );
+  },
+});
+
+// Filtrar para aceptar solo imágenes
+const fileFilter = (req, file, cb) => {
+  const allowedTypes = /jpeg|jpg|png|gif/;
+  const mimeType = allowedTypes.test(file.mimetype);
+  const extname = allowedTypes.test(
+    path.extname(file.originalname).toLowerCase()
+  );
+
+  if (mimeType && extname) {
+    return cb(null, true);
+  }
+  cb(
+    new Error(
+      "Error: El tipo de archivo no está permitido. Solo se aceptan imágenes (jpeg, jpg, png, gif)."
+    )
+  );
+};
+
+const upload = multer({
+  storage: storage,
+  limits: { fileSize: 1024 * 1024 * 5 }, // Límite de 5MB por archivo
+  fileFilter: fileFilter,
+});
+
+// Exportamos un middleware para un solo archivo, esperado en el campo 'imagen'
+module.exports = upload.single("imagen");
+
+=== ./src/middlewares/validation.middleware.js ===
+// src/middlewares/validation.middleware.js
+const { validationResult } = require("express-validator");
+const ApiError = require("../utils/ApiError");
+
+const checkValidation = (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    // Si hay errores de validación, los pasamos a nuestro manejador de errores central.
+    return next(new ApiError(400, "Error de validación", errors.array()));
+  }
+  next();
+};
+
+module.exports = checkValidation;
+
+=== ./src/models/producto.model.js ===
+const mongoose = require("mongoose");
+
+const ProductoSchema = new mongoose.Schema(
+  {
+    nombre: {
+      type: String,
+      required: [true, "El nombre es obligatorio"],
+      trim: true,
+    },
+    descripcion: {
+      type: String,
+      required: [true, "La descripción es obligatoria"],
+    },
+    precio: {
+      type: Number,
+      required: [true, "El precio es obligatorio"],
+      min: [0, "El precio no puede ser negativo"],
+    },
+    stock: {
+      type: Number,
+      required: [true, "El stock es obligatorio"],
+      min: [0, "El stock no puede ser negativo"],
+      default: 0,
+    },
+    categoria: {
+      type: String,
+      trim: true,
+    },
+    imagenUrl: {
+      type: String,
+    },
+    // NUEVO CAMPO PARA SOFT DELETE
+    isActive: {
+      type: Boolean,
+      default: true, // Por defecto, todos los productos están activos
+    },
+  },
+  { timestamps: true }
+);
+
+// Middleware de Mongoose para que todas las búsquedas (`find`, `findOne`, etc.)
+// filtren automáticamente solo los productos activos.
+ProductoSchema.pre(/^find/, function (next) {
+  // this se refiere a la consulta (query)
+  this.where({ isActive: { $ne: false } }); // Excluir documentos donde isActive es false
+  next();
+});
+
+// Método estático para obtener TODOS los productos, ignorando el hook pre-find.
+ProductoSchema.statics.findWithInactive = function () {
+  return this.find({ _id: { $exists: true } });
+};
+
+module.exports = mongoose.model("Producto", ProductoSchema);
+
+=== ./src/models/usuario.model.js ===
+const mongoose = require("mongoose");
+const bcrypt = require("bcryptjs");
+
+const UsuarioSchema = new mongoose.Schema(
+  {
+    email: {
+      type: String,
+      required: [true, "El email es obligatorio"],
+      unique: true,
+      lowercase: true,
+      trim: true,
+    },
+    password: {
+      type: String,
+      required: [true, "La contraseña es obligatoria"],
+      minlength: 6,
+    },
+    role: {
+      type: String,
+      enum: ["admin", "cliente"], // Aunque solo usaremos admin, es buena práctica definir roles
+      default: "cliente",
+    },
+  },
+  { timestamps: true }
+);
+
+// Hook para hashear la contraseña antes de guardarla
+UsuarioSchema.pre("save", async function (next) {
+  if (!this.isModified("password")) {
+    return next();
+  }
+  const salt = await bcrypt.genSalt(10);
+  this.password = await bcrypt.hash(this.password, salt);
+  next();
+});
+
+// Método para comparar contraseñas
+UsuarioSchema.methods.comparePassword = async function (candidatePassword) {
+  return await bcrypt.compare(candidatePassword, this.password);
+};
+
+// Método estático para obtener TODOS los productos, ignorando el hook pre-find.
+UsuarioSchema.statics.findWithInactive = function () {
+  return this.find({ _id: { $exists: true } });
+};
+
+module.exports = mongoose.model("Usuario", UsuarioSchema);
+
+=== ./src/routes/auth.routes.js ===
+const express = require("express");
+const router = express.Router();
+const { login } = require("../controllers/auth.controller");
+const { validateLogin } = require("../validators/auth.validator");
+
+// POST /api/v1/auth/login
+router.post("/login", validateLogin, login);
+
+// NOTA: Para crear el primer admin, puedes crear un script aparte o una ruta protegida especial.
+// router.post('/register-admin', registerAdmin); // Ejemplo
+
+module.exports = router;
+
+=== ./src/routes/producto.routes.js ===
+// src/routes/producto.routes.js (VERSIÓN FINAL Y CORREGIDA)
+
+const express = require("express");
+const router = express.Router();
+const productoController = require("../controllers/producto.controller");
+const verifyToken = require("../middlewares/jwt.middleware");
+const checkAdmin = require("../middlewares/role.middleware");
+const upload = require("../middlewares/upload.middleware");
+const { validateProduct } = require("../validators/producto.validator");
+
+// NOTA: Para este tipo de validación, es mejor tener un middleware separado,
+// pero por ahora, la dejamos aquí para simplificar.
+const checkValidation = (req, res, next) => {
+  const { validationResult } = require("express-validator");
+  const ApiError = require("../utils/ApiError");
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    // Si hay errores de validación, los pasamos a nuestro manejador de errores central.
+    return next(new ApiError(400, "Error de validación", errors.array()));
+  }
+  next();
+};
+
+// Todas las rutas de productos requieren token y rol de admin
+router.use(verifyToken, checkAdmin);
+
+router
+  .route("/")
+  .get(productoController.getAllProducts)
+  // Encadenamos middlewares: upload -> validación de body -> chequeo de validación -> controlador
+  .post(
+    upload,
+    validateProduct,
+    checkValidation,
+    productoController.createProduct
+  );
+
+router
+  .route("/:id") // <--- ¡ESTA ES LA CORRECCIÓN CLAVE!
+  .get(productoController.getProductById)
+  .put(
+    upload,
+    validateProduct,
+    checkValidation,
+    productoController.updateProduct
+  )
+  .delete(productoController.deleteProduct);
+
+// NUEVA RUTA: Para sincronización en lote desde la app móvil
+router.post("/sync", productoController.syncProducts);
+
+// NUEVA RUTA: Obtener todos los productos, incluyendo inactivos (para admin o sync total)
+router.get("/all-for-sync", productoController.getAllProductsForSync);
+
+module.exports = router;
+
+=== ./src/services/auth.service.js ===
+const Usuario = require("../models/usuario.model");
+const jwt = require("jsonwebtoken");
+const ApiError = require("../utils/ApiError"); // Importamos nuestro error personalizado
+
+exports.loginUser = async (email, password) => {
+  const user = await Usuario.findOne({ email });
+  if (!user) {
+    // CAMBIO: Lanzamos un error específico
+    throw new ApiError(401, "Credenciales inválidas");
+  }
+
+  const isMatch = await user.comparePassword(password);
+  if (!isMatch) {
+    // CAMBIO: Lanzamos un error específico
+    throw new ApiError(401, "Credenciales inválidas");
+  }
+
+  // Si las credenciales son correctas, generamos el token
+  const token = jwt.sign(
+    { id: user._id, role: user.role },
+    process.env.JWT_SECRET,
+    { expiresIn: process.env.JWT_EXPIRES_IN }
+  );
+
+  return {
+    token,
+    user: {
+      id: user._id,
+      email: user.email,
+      role: user.role,
+    },
+  };
+};
+
+=== ./src/services/producto.service.js ===
+const Producto = require("../models/producto.model");
+const ApiError = require("../utils/ApiError");
+const fs = require("fs");
+const path = require("path");
+
+// Helper para borrar una imagen
+const deleteImageFile = (imageUrl) => {
+  if (imageUrl) {
+    const filename = imageUrl.split("/uploads/")[1];
+    const imagePath = path.join(__dirname, "../../public/uploads", filename);
+    if (fs.existsSync(imagePath)) {
+      fs.unlinkSync(imagePath);
+    }
+  }
+};
+
+exports.createProduct = async (productData) => {
+  const newProduct = new Producto(productData);
+  return await newProduct.save();
+};
+
+exports.getAllProducts = async (page, limit) => {
+  const skip = (page - 1) * limit;
+  const products = await Producto.find().skip(skip).limit(limit);
+  const totalProducts = await Producto.countDocuments();
+  return {
+    products,
+    totalPages: Math.ceil(totalProducts / limit),
+    currentPage: page,
+  };
+};
+
+exports.getProductById = async (id) => {
+  const product = await Producto.findById(id);
+  if (!product) {
+    throw new ApiError(404, "Producto no encontrado");
+  }
+  return product;
+};
+
+exports.updateProduct = async (id, updateData) => {
+  // CAMBIO: Lógica para borrar la imagen anterior si se sube una nueva
+  if (updateData.imagenUrl) {
+    const productToUpdate = await Producto.findById(id);
+    if (productToUpdate && productToUpdate.imagenUrl) {
+      deleteImageFile(productToUpdate.imagenUrl);
+    }
+  }
+
+  const updatedProduct = await Producto.findByIdAndUpdate(id, updateData, {
+    new: true,
+    runValidators: true,
+  });
+  if (!updatedProduct) {
+    throw new ApiError(404, "Producto no encontrado");
+  }
+  return updatedProduct;
+};
+
+exports.deleteProduct = async (id) => {
+  // CAMBIO: En lugar de borrar, hacemos un borrado lógico
+  const product = await Producto.findByIdAndUpdate(
+    id,
+    { isActive: false },
+    { new: true }
+  );
+
+  if (!product) {
+    throw new ApiError(404, "Producto no encontrado");
+  }
+  // No borramos la imagen físicamente, por si se necesita recuperar el producto.
+  // Si quieres borrarla, puedes descomentar la siguiente línea:
+  // deleteImageFile(product.imagenUrl);
+
+  return product;
+};
+
+exports.syncProducts = async (productsFromClient) => {
+  const promises = productsFromClient.map((product) => {
+    // Si el producto tiene un ID, es una actualización.
+    if (product._id) {
+      const id = product._id;
+      delete product._id; // Quitamos el id del objeto para que no intente actualizarlo
+      return Producto.findByIdAndUpdate(id, product, {
+        new: true,
+        runValidators: true,
+        upsert: true,
+      });
+      // upsert: true -> si no encuentra el ID, lo crea.
+    } else {
+      // Si no tiene ID, es una creación.
+      const newProduct = new Producto(product);
+      return newProduct.save();
+    }
+  });
+
+  const settledPromises = await Promise.allSettled(promises);
+
+  // Devolvemos un reporte de qué se creó/actualizó y qué falló.
+  const results = {
+    successful: [],
+    failed: [],
+  };
+
+  settledPromises.forEach((result, index) => {
+    const originalProduct = productsFromClient[index];
+    if (result.status === "fulfilled") {
+      results.successful.push({
+        tempId: originalProduct.tempId || null,
+        product: result.value,
+      });
+    } else {
+      results.failed.push({
+        product: originalProduct,
+        reason: result.reason.message,
+      });
+    }
+  });
+
+  return results;
+};
+
+exports.getAllProductsForSync = async () => {
+  // Usamos el método estático definido en el modelo para obtener todos los productos, incluyendo inactivos
+  return await Producto.findWithInactive();
+};
+
+=== ./src/utils/ApiError.js ===
+// src/utils/ApiError.js
+
+class ApiError extends Error {
+  constructor(statusCode, message, errors = []) {
+    super(message);
+    this.statusCode = statusCode;
+    this.errors = errors;
+  }
+}
+
+module.exports = ApiError;
+
+=== ./src/utils/response.handler.js ===
+// src/utils/response.handler.js
+
+const jsonResponse = (res, statusCode, data, message = "Operación exitosa") => {
+  res.status(statusCode).json({
+    status: "success",
+    message,
+    data,
+  });
+};
+
+const errorResponse = (res, statusCode, message, errors = null) => {
+  const response = {
+    status: "error",
+    message,
+  };
+  if (errors) {
+    response.errors = errors;
+  }
+  res.status(statusCode).json(response);
+};
+
+module.exports = {
+  jsonResponse,
+  errorResponse,
+};
+
+=== ./src/validators/auth.validator.js ===
+const { body } = require("express-validator");
+
+exports.validateLogin = [
+  body("email").isEmail().withMessage("Debe ser un email válido"),
+  body("password").notEmpty().withMessage("La contraseña no puede estar vacía"),
+];
+
+=== ./src/validators/producto.validator.js ===
+const { body } = require("express-validator");
+
+exports.validateProduct = [
+  body("nombre").notEmpty().withMessage("El nombre es requerido"),
+  body("descripcion").notEmpty().withMessage("La descripción es requerida"),
+  body("precio")
+    .isFloat({ gt: 0 })
+    .withMessage("El precio debe ser un número positivo"),
+  body("stock")
+    .isInt({ min: 0 })
+    .withMessage("El stock debe ser un número entero no negativo"),
+];
+

@@ -39,5 +39,9 @@ UsuarioSchema.methods.comparePassword = async function (candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
 };
 
-module.exports = mongoose.model("Usuario", UsuarioSchema);
+// Método estático para obtener TODOS los productos, ignorando el hook pre-find.
+UsuarioSchema.statics.findWithInactive = function () {
+  return this.find({ _id: { $exists: true } });
+};
 
+module.exports = mongoose.model("Usuario", UsuarioSchema);

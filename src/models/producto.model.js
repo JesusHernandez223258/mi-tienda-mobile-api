@@ -22,7 +22,6 @@ const ProductoSchema = new mongoose.Schema(
       min: [0, "El stock no puede ser negativo"],
       default: 0,
     },
-    // Opcional: una categoría o imagen
     categoria: {
       type: String,
       trim: true,
@@ -30,8 +29,26 @@ const ProductoSchema = new mongoose.Schema(
     imagenUrl: {
       type: String,
     },
+    // NUEVO CAMPO PARA SOFT DELETE
+    isActive: {
+      type: Boolean,
+      default: true, // Por defecto, todos los productos están activos
+    },
   },
   { timestamps: true }
 );
+
+// Middleware de Mongoose para que todas las búsquedas (`find`, `findOne`, etc.)
+// filtren automáticamente solo los productos activos.
+ProductoSchema.pre(/^find/, function (next) {
+  // this se refiere a la consulta (query)
+  this.where({ isActive: { $ne: false } }); // Excluir documentos donde isActive es false
+  next();
+});
+
+// Método estático para obtener TODOS los productos, ignorando el hook pre-find.
+ProductoSchema.statics.findWithInactive = function () {
+  return this.find({ _id: { $exists: true } });
+};
 
 module.exports = mongoose.model("Producto", ProductoSchema);

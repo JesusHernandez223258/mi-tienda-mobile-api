@@ -1,20 +1,19 @@
 const productoService = require("../services/producto.service");
 const { validationResult } = require("express-validator");
-
-const handleValidationErrors = (req, res) => {
-  const errors = validationResult(req);
-  if (!errors.isEmpty()) {
-    res.status(400).json({ errors: errors.array() });
-    return true;
-  }
-  return false;
-};
+const { jsonResponse } = require("../utils/response.handler");
+const ApiError = require("../utils/ApiError");
 
 exports.createProduct = async (req, res, next) => {
-  if (handleValidationErrors(req, res)) return;
   try {
-    const product = await productoService.createProduct(req.body);
-    res.status(201).json({ message: "Producto creado exitosamente", product });
+    // YA NO ES NECESARIO VALIDAR AQUÍ. Si llega aquí, es porque los datos son válidos.
+    const productData = { ...req.body };
+    if (req.file) {
+      // Usar la IP del host de la petición, no 'localhost'
+      const host = req.get("host");
+      productData.imagenUrl = `${req.protocol}://${host}/uploads/${req.file.filename}`;
+    }
+    const product = await productoService.createProduct(productData);
+    jsonResponse(res, 201, product, "Producto creado exitosamente");
   } catch (error) {
     next(error);
   }
@@ -22,12 +21,10 @@ exports.createProduct = async (req, res, next) => {
 
 exports.getAllProducts = async (req, res, next) => {
   try {
-    // Leer page y limit de los query params, con valores por defecto
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
-
     const result = await productoService.getAllProducts(page, limit);
-    res.status(200).json(result);
+    jsonResponse(res, 200, result);
   } catch (error) {
     next(error);
   }
@@ -36,31 +33,25 @@ exports.getAllProducts = async (req, res, next) => {
 exports.getProductById = async (req, res, next) => {
   try {
     const product = await productoService.getProductById(req.params.id);
-    if (!product) {
-      return res.status(404).json({ message: "Producto no encontrado" });
-    }
-    res.status(200).json(product);
+    jsonResponse(res, 200, product);
   } catch (error) {
     next(error);
   }
 };
 
 exports.updateProduct = async (req, res, next) => {
-  if (handleValidationErrors(req, res)) return;
   try {
+    // YA NO ES NECESARIO VALIDAR AQUÍ. Si llega aquí, es porque los datos son válidos.
+    const updateData = { ...req.body };
+    if (req.file) {
+      const host = req.get("host");
+      updateData.imagenUrl = `${req.protocol}://${host}/uploads/${req.file.filename}`;
+    }
     const updatedProduct = await productoService.updateProduct(
       req.params.id,
-      req.body
+      updateData
     );
-    if (!updatedProduct) {
-      return res.status(404).json({ message: "Producto no encontrado" });
-    }
-    res
-      .status(200)
-      .json({
-        message: "Producto actualizado exitosamente",
-        product: updatedProduct,
-      });
+    jsonResponse(res, 200, updatedProduct, "Producto actualizado exitosamente");
   } catch (error) {
     next(error);
   }
@@ -68,12 +59,38 @@ exports.updateProduct = async (req, res, next) => {
 
 exports.deleteProduct = async (req, res, next) => {
   try {
-    const deletedProduct = await productoService.deleteProduct(req.params.id);
-    if (!deletedProduct) {
-      return res.status(404).json({ message: "Producto no encontrado" });
-    }
-    res.status(200).json({ message: "Producto eliminado exitosamente" });
+    await productoService.deleteProduct(req.params.id);
+    jsonResponse(res, 200, null, "Producto eliminado exitosamente");
   } catch (error) {
     next(error);
   }
 };
+
+exports.syncProducts = async (req, res, next) => {
+  try {
+    // El body debería ser un array de productos: { "products": [...] }
+    const { products } = req.body;
+
+    if (!Array.isArray(products)) {
+      throw new ApiError(
+        400,
+        "El cuerpo de la petición debe contener un array de 'products'."
+      );
+    }
+
+    const results = await productoService.syncProducts(products);
+    jsonResponse(res, 200, results, "Sincronización completada.");
+  } catch (error) {
+    next(error);
+  }
+};
+
+exports.getAllProductsForSync = async (req, res, next) => {
+  try {
+    const products = await productoService.getAllProductsForSync();
+    jsonResponse(res, 200, products);
+  } catch (error) {
+    next(error);
+  }
+};
+

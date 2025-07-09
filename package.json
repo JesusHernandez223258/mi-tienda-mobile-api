@@ -10,17 +10,26 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "",
+  "description": "![Node.js](https://img.shields.io/badge/Node.js-16.x-green?style=for-the-badge&logo=node.js) ![Express.js](https://img.shields.io/badge/Express.js-4.x-blue?style=for-the-badge&logo=express) ![MongoDB](https://img.shields.io/badge/MongoDB-5.x-green?style=for-the-badge&logo=mongodb)",
   "dependencies": {
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
-    "dotenv": "^16.6.0",
+    "dotenv": "^16.6.1",
     "express": "^5.1.0",
     "express-validator": "^7.2.1",
     "jsonwebtoken": "^9.0.2",
-    "mongoose": "^8.16.1"
+    "mongoose": "^8.16.1",
+    "multer": "^2.0.1"
   },
   "devDependencies": {
     "nodemon": "^3.1.10"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/JesusHernandez223258/mi-tienda-mobile-api.git"
+  },
+  "bugs": {
+    "url": "https://github.com/JesusHernandez223258/mi-tienda-mobile-api/issues"
+  },
+  "homepage": "https://github.com/JesusHernandez223258/mi-tienda-mobile-api#readme"
 }

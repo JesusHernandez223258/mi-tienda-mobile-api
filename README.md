@@ -39,7 +39,7 @@ Asegúrate de tener instalado lo siguiente en tu entorno de desarrollo:
 
 1.  **Clona el repositorio:**
     ```bash
-    git clone https://URL_DE_TU_REPOSITORIO.git
+    git clone https://github.com/JesusHernandez223258/mi-tienda-mobile-api.git
     cd nombre-del-directorio
     ```
 

@@ -1,17 +1,22 @@
 const authService = require("../services/auth.service");
 const { validationResult } = require("express-validator");
+const { jsonResponse } = require("../utils/response.handler");
+const ApiError = require("../utils/ApiError");
 
 exports.login = async (req, res, next) => {
   const errors = validationResult(req);
   if (!errors.isEmpty()) {
-    return res.status(400).json({ errors: errors.array() });
+    return next(new ApiError(400, "Error de validación", errors.array()));
   }
 
   try {
     const { email, password } = req.body;
-    const data = await authService.loginUser(email, password);
-    res.json(data);
+    const { token, user } = await authService.loginUser(email, password);
+
+    // CAMBIO: Usamos nuestro manejador de respuestas
+    // y enviamos el token en el cuerpo para facilitar la prueba en la UI
+    jsonResponse(res, 200, { token, user }, "Login exitoso");
   } catch (error) {
-    next(error); // Pasa el error al middleware de errores
+    next(error);
   }
 };

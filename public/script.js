@@ -1,3 +1,5 @@
+// public/script.js
+
 document.addEventListener("DOMContentLoaded", () => {
   // ---- ESTADO Y USUARIOS DE PRUEBA ----
   let authToken = null;
@@ -23,7 +25,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const deleteProductBtn = document.getElementById("delete-product-btn");
 
   // ---- INICIALIZACIÓN ----
-  // Cargar usuarios de prueba en el datalist
   const datalist = document.getElementById("test-users");
   testUsers.forEach((user) => {
     const option = document.createElement("option");
@@ -31,7 +32,6 @@ document.addEventListener("DOMContentLoaded", () => {
     datalist.appendChild(option);
   });
 
-  // Autocompletar contraseña al seleccionar un email
   document.getElementById("email").addEventListener("input", (e) => {
     const user = testUsers.find((u) => u.email === e.target.value);
     if (user) {
@@ -43,12 +43,18 @@ document.addEventListener("DOMContentLoaded", () => {
   const apiCall = async (endpoint, method = "GET", body = null) => {
     const options = {
       method,
-      headers: { "Content-Type": "application/json" },
+      headers: {}, // Headers se manejan dinámicamente
     };
     if (authToken) {
       options.headers["Authorization"] = `Bearer ${authToken}`;
     }
-    if (body) {
+
+    // Detectar si el body es FormData
+    if (body instanceof FormData) {
+      options.body = body;
+      // NO establecer 'Content-Type', el navegador lo hace automáticamente
+    } else if (body) {
+      options.headers["Content-Type"] = "application/json";
       options.body = JSON.stringify(body);
     }
 
@@ -84,22 +90,22 @@ document.addEventListener("DOMContentLoaded", () => {
     e.preventDefault();
     const email = document.getElementById("email").value;
     const password = document.getElementById("password").value;
-
     const { ok, data } = await apiCall("/api/v1/auth/login", "POST", {
       email,
       password,
     });
 
-    if (ok && data.token) {
-      authToken = data.token;
+    // CORRECCIÓN: Comprobar que 'data.data' y 'data.data.token' existan.
+    if (ok && data && data.data && data.data.token) {
+      authToken = data.data.token;
       document.getElementById("user-info").innerHTML = `
-              <p><strong>Usuario:</strong> ${data.user.email}</p>
-              <p><strong>Rol:</strong> ${data.user.role}</p>
-              <p><strong>Token:</strong> <span style="font-size: 12px; word-break: break-all;">${authToken.substring(
-                0,
-                40
-              )}...</span></p>
-          `;
+            <p><strong>Usuario:</strong> ${data.data.user.email}</p>
+            <p><strong>Rol:</strong> ${data.data.user.role}</p>
+            <p><strong>Token:</strong> <span style="font-size: 12px; word-break: break-all;">${authToken.substring(
+              0,
+              40
+            )}...</span></p>
+        `;
       updateUI(true);
     } else {
       updateUI(false);
@@ -120,18 +126,12 @@ document.addEventListener("DOMContentLoaded", () => {
   // Crear producto
   createProductForm.addEventListener("submit", async (e) => {
     e.preventDefault();
-    const product = {
-      nombre: document.getElementById("create-nombre").value,
-      descripcion: document.getElementById("create-descripcion").value,
-      precio: parseFloat(document.getElementById("create-precio").value),
-      stock: parseInt(document.getElementById("create-stock").value),
-    };
-    print(`Creando producto: ${JSON.stringify(product)}`);
-    await apiCall("/api/v1/productos", "POST", product);
+    const formData = new FormData(createProductForm); // Usamos FormData
+    await apiCall("/api/v1/productos", "POST", formData);
     createProductForm.reset();
   });
 
-  // Obtener producto por ID
+  // Obtener producto por ID (y autocompletar)
   getProductBtn.addEventListener("click", async () => {
     const id = document.getElementById("product-id").value;
     if (!id) {
@@ -139,12 +139,20 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
     const { ok, data } = await apiCall(`/api/v1/productos/${id}`);
-    // Autocompletar el formulario de actualización si la petición fue exitosa
     if (ok) {
-      document.getElementById("update-nombre").value = data.nombre;
-      document.getElementById("update-descripcion").value = data.descripcion;
-      document.getElementById("update-precio").value = data.precio;
-      document.getElementById("update-stock").value = data.stock;
+      // La data ahora está en data.data
+      const product = data.data;
+      document.querySelector(
+        '#update-product-form input[name="nombre"]'
+      ).value = product.nombre;
+      document.querySelector(
+        '#update-product-form input[name="descripcion"]'
+      ).value = product.descripcion;
+      document.querySelector(
+        '#update-product-form input[name="precio"]'
+      ).value = product.precio;
+      document.querySelector('#update-product-form input[name="stock"]').value =
+        product.stock;
     }
   });
 
@@ -157,13 +165,8 @@ document.addEventListener("DOMContentLoaded", () => {
         "Introduce un ID para poder actualizar el producto.";
       return;
     }
-    const updatedProduct = {
-      nombre: document.getElementById("update-nombre").value,
-      descripcion: document.getElementById("update-descripcion").value,
-      precio: parseFloat(document.getElementById("update-precio").value),
-      stock: parseInt(document.getElementById("update-stock").value),
-    };
-    await apiCall(`/api/v1/productos/${id}`, "PUT", updatedProduct);
+    const formData = new FormData(updateProductForm);
+    await apiCall(`/api/v1/productos/${id}`, "PUT", formData);
   });
 
   // Eliminar producto
