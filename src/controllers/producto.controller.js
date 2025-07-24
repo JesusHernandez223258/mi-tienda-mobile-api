@@ -5,12 +5,9 @@ const ApiError = require("../utils/ApiError");
 
 exports.createProduct = async (req, res, next) => {
   try {
-    // YA NO ES NECESARIO VALIDAR AQUÍ. Si llega aquí, es porque los datos son válidos.
     const productData = { ...req.body };
     if (req.file) {
-      // Usar la IP del host de la petición, no 'localhost'
-      const host = req.get("host");
-      productData.imagenUrl = `${req.protocol}://${host}/uploads/${req.file.filename}`;
+      productData.imagenUrl = `${process.env.API_BASE_URL}/uploads/${req.file.filename}`;
     }
     const product = await productoService.createProduct(productData);
     jsonResponse(res, 201, product, "Producto creado exitosamente");
@@ -41,11 +38,9 @@ exports.getProductById = async (req, res, next) => {
 
 exports.updateProduct = async (req, res, next) => {
   try {
-    // YA NO ES NECESARIO VALIDAR AQUÍ. Si llega aquí, es porque los datos son válidos.
     const updateData = { ...req.body };
     if (req.file) {
-      const host = req.get("host");
-      updateData.imagenUrl = `${req.protocol}://${host}/uploads/${req.file.filename}`;
+      updateData.imagenUrl = `${process.env.API_BASE_URL}/uploads/${req.file.filename}`;
     }
     const updatedProduct = await productoService.updateProduct(
       req.params.id,

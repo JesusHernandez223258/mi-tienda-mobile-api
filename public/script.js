@@ -6,8 +6,6 @@ document.addEventListener("DOMContentLoaded", () => {
   const testUsers = [
     { email: "admin@tienda.com", password: "test1234" },
     { email: "noadmin@tienda.com", password: "password1" },
-    { email: "bloqueado@tienda.com", password: "password2" },
-    { email: "otro@test.com", password: "password3" },
   ];
 
   // ---- REFERENCIAS A ELEMENTOS DEL DOM ----
@@ -18,6 +16,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Formularios y botones
   const loginForm = document.getElementById("login-form");
   const logoutBtn = document.getElementById("logout-btn");
+  const registerForm = document.getElementById("register-form"); // <-- Referencia al nuevo formulario
   const listProductsForm = document.getElementById("list-products-form");
   const createProductForm = document.getElementById("create-product-form");
   const updateProductForm = document.getElementById("update-product-form");
@@ -43,16 +42,14 @@ document.addEventListener("DOMContentLoaded", () => {
   const apiCall = async (endpoint, method = "GET", body = null) => {
     const options = {
       method,
-      headers: {}, // Headers se manejan dinámicamente
+      headers: {},
     };
     if (authToken) {
       options.headers["Authorization"] = `Bearer ${authToken}`;
     }
 
-    // Detectar si el body es FormData
     if (body instanceof FormData) {
       options.body = body;
-      // NO establecer 'Content-Type', el navegador lo hace automáticamente
     } else if (body) {
       options.headers["Content-Type"] = "application/json";
       options.body = JSON.stringify(body);
@@ -95,7 +92,6 @@ document.addEventListener("DOMContentLoaded", () => {
       password,
     });
 
-    // CORRECCIÓN: Comprobar que 'data.data' y 'data.data.token' existan.
     if (ok && data && data.data && data.data.token) {
       authToken = data.data.token;
       document.getElementById("user-info").innerHTML = `
@@ -104,8 +100,7 @@ document.addEventListener("DOMContentLoaded", () => {
             <p><strong>Token:</strong> <span style="font-size: 12px; word-break: break-all;">${authToken.substring(
               0,
               40
-            )}...</span></p>
-        `;
+            )}...</span></p>`;
       updateUI(true);
     } else {
       updateUI(false);
@@ -114,6 +109,18 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Logout
   logoutBtn.addEventListener("click", () => updateUI(false));
+
+  // <<<--- NUEVO MANEJADOR PARA EL REGISTRO ---<<<
+  registerForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    const userData = {
+      email: registerForm.querySelector('input[name="email"]').value,
+      password: registerForm.querySelector('input[name="password"]').value,
+      role: registerForm.querySelector('select[name="role"]').value,
+    };
+    await apiCall("/api/v1/auth/register", "POST", userData);
+    registerForm.reset();
+  });
 
   // Listar productos
   listProductsForm.addEventListener("submit", async (e) => {
@@ -126,7 +133,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Crear producto
   createProductForm.addEventListener("submit", async (e) => {
     e.preventDefault();
-    const formData = new FormData(createProductForm); // Usamos FormData
+    const formData = new FormData(createProductForm);
     await apiCall("/api/v1/productos", "POST", formData);
     createProductForm.reset();
   });
@@ -139,8 +146,7 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
     const { ok, data } = await apiCall(`/api/v1/productos/${id}`);
-    if (ok) {
-      // La data ahora está en data.data
+    if (ok && data.data) {
       const product = data.data;
       document.querySelector(
         '#update-product-form input[name="nombre"]'

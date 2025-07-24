@@ -17,7 +17,7 @@ const UsuarioSchema = new mongoose.Schema(
     },
     role: {
       type: String,
-      enum: ["admin", "cliente"], // Aunque solo usaremos admin, es buena práctica definir roles
+      enum: ["admin", "cliente"],
       default: "cliente",
     },
   },
@@ -37,11 +37,6 @@ UsuarioSchema.pre("save", async function (next) {
 // Método para comparar contraseñas
 UsuarioSchema.methods.comparePassword = async function (candidatePassword) {
   return await bcrypt.compare(candidatePassword, this.password);
-};
-
-// Método estático para obtener TODOS los productos, ignorando el hook pre-find.
-UsuarioSchema.statics.findWithInactive = function () {
-  return this.find({ _id: { $exists: true } });
 };
 
 module.exports = mongoose.model("Usuario", UsuarioSchema);

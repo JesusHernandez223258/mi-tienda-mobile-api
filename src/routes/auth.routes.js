@@ -1,12 +1,28 @@
+// src/routes/auth.routes.js (CORREGIDO)
 const express = require("express");
 const router = express.Router();
-const { login } = require("../controllers/auth.controller");
-const { validateLogin } = require("../validators/auth.validator");
 
-// POST /api/v1/auth/login
-router.post("/login", validateLogin, login);
+// --- IMPORTACIONES NECESARIAS ---
+const { login, register } = require("../controllers/auth.controller");
+const {
+  validateLogin,
+  validateRegister,
+} = require("../validators/auth.validator");
+const checkValidation = require("../middlewares/validation.middleware");
+const verifyToken = require("../middlewares/jwt.middleware");
+const checkAdmin = require("../middlewares/role.middleware");
 
-// NOTA: Para crear el primer admin, puedes crear un script aparte o una ruta protegida especial.
-// router.post('/register-admin', registerAdmin); // Ejemplo
+// --- RUTAS ---
+
+// Ruta pública para Login
+router.post("/login", validateLogin, checkValidation, login);
+
+// Ruta protegida para registrar nuevos usuarios (solo admins)
+router.post(
+  "/register",
+  validateRegister,
+  checkValidation,
+  register
+);
 
 module.exports = router;
