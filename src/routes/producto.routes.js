@@ -21,13 +21,14 @@ const checkValidation = (req, res, next) => {
   next();
 };
 
-// Todas las rutas de productos requieren token y rol de admin
 router.use(verifyToken, checkAdmin);
+
+router.get("/all-for-sync", productoController.getAllProductsForSync);
+router.post("/sync", productoController.syncProducts);
 
 router
   .route("/")
   .get(productoController.getAllProducts)
-  // Encadenamos middlewares: upload -> validación de body -> chequeo de validación -> controlador
   .post(
     upload,
     validateProduct,
@@ -36,7 +37,7 @@ router
   );
 
 router
-  .route("/:id") // <--- ¡ESTA ES LA CORRECCIÓN CLAVE!
+  .route("/:id")
   .get(productoController.getProductById)
   .put(
     upload,
@@ -45,11 +46,5 @@ router
     productoController.updateProduct
   )
   .delete(productoController.deleteProduct);
-
-// NUEVA RUTA: Para sincronización en lote desde la app móvil
-router.post("/sync", productoController.syncProducts);
-
-// NUEVA RUTA: Obtener todos los productos, incluyendo inactivos (para admin o sync total)
-router.get("/all-for-sync", productoController.getAllProductsForSync);
 
 module.exports = router;
