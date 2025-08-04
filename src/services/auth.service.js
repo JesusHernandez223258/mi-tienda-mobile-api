@@ -19,30 +19,68 @@ exports.registerUser = async (userData) => {
   return userToReturn;
 };
 
-// FUNCIÓN DE LOGIN (SEPARADA Y CORRECTA)
+
 exports.loginUser = async (email, password) => {
   const user = await Usuario.findOne({ email });
-  if (!user) {
+  if (!user || !(await user.comparePassword(password))) {
     throw new ApiError(401, "Credenciales inválidas");
   }
 
-  const isMatch = await user.comparePassword(password);
-  if (!isMatch) {
-    throw new ApiError(401, "Credenciales inválidas");
-  }
-
-  const token = jwt.sign(
+  // Generar Access Token (corto)
+  const accessToken = jwt.sign(
     { id: user._id, role: user.role },
     process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRES_IN }
+    { expiresIn: "15m" } // Duración corta recomendada
   );
 
+  // Generar Refresh Token (largo)
+  const refreshToken = jwt.sign(
+    { id: user._id },
+    process.env.JWT_REFRESH_SECRET,
+    { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN }
+  );
+
+  // ✅ Limpiamos tokens viejos y guardamos el nuevo
+  user.refreshTokens = []; // Opcional: si solo permites una sesión a la vez.
+  user.refreshTokens.push({ token: refreshToken });
+  await user.save();
+
   return {
-    token,
-    user: {
-      id: user._id,
-      email: user.email,
-      role: user.role,
-    },
+    accessToken,
+    refreshToken,
+    user: { id: user._id, email: user.email, role: user.role },
   };
+};
+
+exports.refreshToken = async (token) => {
+  if (!token) throw new ApiError(401, "Refresh token no proporcionado");
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_REFRESH_SECRET);
+    const user = await Usuario.findOne({
+      _id: decoded.id,
+      "refreshTokens.token": token,
+    });
+
+    if (!user) throw new ApiError(403, "Refresh token inválido o revocado");
+
+    const newAccessToken = jwt.sign(
+      { id: user._id, role: user.role },
+      process.env.JWT_SECRET,
+      { expiresIn: "15m" }
+    );
+
+    return { accessToken: newAccessToken };
+  } catch (error) {
+    console.error("Error al refrescar token:", error);
+    // Eliminamos el refresh token guardado en BD
+    const user = await Usuario.findOne({ "refreshTokens.token": token });
+    if (user) {
+      user.refreshTokens = user.refreshTokens.filter(
+        (rt) => rt.token !== token
+      );
+      await user.save();
+    }
+    throw new ApiError(403, "Refresh token inválido o expirado");
+  }
 };
