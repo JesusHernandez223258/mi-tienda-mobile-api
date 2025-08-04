@@ -1,13 +1,24 @@
 const productoService = require("../services/producto.service");
-const { validationResult } = require("express-validator");
 const { jsonResponse } = require("../utils/response.handler");
 const ApiError = require("../utils/ApiError");
+
+// --- URL BASE PARA EL EMULADOR DE ANDROID ---
+// Esta IP es una dirección especial que desde el emulador apunta al 'localhost' de la máquina anfitriona.
+const API_BASE_URL_FOR_EMULATOR = "http://10.0.2.2:3000";
+
+/**
+ * Construye la URL completa de la imagen.
+ * Usa la URL del emulador para que la app móvil pueda acceder a ella directamente.
+ */
+const buildImageUrl = (filename) => {
+  return `${API_BASE_URL_FOR_EMULATOR}/uploads/${filename}`;
+};
 
 exports.createProduct = async (req, res, next) => {
   try {
     const productData = { ...req.body };
     if (req.file) {
-      productData.imagenUrl = `${process.env.API_BASE_URL}/uploads/${req.file.filename}`;
+      productData.imagenUrl = buildImageUrl(req.file.filename);
     }
     const product = await productoService.createProduct(productData);
     jsonResponse(res, 201, product, "Producto creado exitosamente");
@@ -40,7 +51,7 @@ exports.updateProduct = async (req, res, next) => {
   try {
     const updateData = { ...req.body };
     if (req.file) {
-      updateData.imagenUrl = `${process.env.API_BASE_URL}/uploads/${req.file.filename}`;
+      updateData.imagenUrl = buildImageUrl(req.file.filename);
     }
     const updatedProduct = await productoService.updateProduct(
       req.params.id,
@@ -61,18 +72,17 @@ exports.deleteProduct = async (req, res, next) => {
   }
 };
 
+// --- Endpoints de Sincronización ---
+
 exports.syncProducts = async (req, res, next) => {
   try {
-    // El body debería ser un array de productos: { "products": [...] }
     const { products } = req.body;
-
     if (!Array.isArray(products)) {
       throw new ApiError(
         400,
         "El cuerpo de la petición debe contener un array de 'products'."
       );
     }
-
     const results = await productoService.syncProducts(products);
     jsonResponse(res, 200, results, "Sincronización completada.");
   } catch (error) {
@@ -88,4 +98,3 @@ exports.getAllProductsForSync = async (req, res, next) => {
     next(error);
   }
 };
-

@@ -47,8 +47,9 @@ ProductoSchema.pre(/^find/, function (next) {
 });
 
 // Método estático para obtener TODOS los productos, ignorando el hook pre-find.
-ProductoSchema.statics.findWithInactive = function () {
-  return this.find({ _id: { $exists: true } });
+ProductoSchema.statics.findWithInactive = function (conditions = {}) {
+  // `this.find` sin el hook se logra sobrecargando las opciones o usando una query básica
+  return this.find(conditions).setOptions({ skipHooks: true }); // La forma más moderna y limpia.
 };
 
 module.exports = mongoose.model("Producto", ProductoSchema);

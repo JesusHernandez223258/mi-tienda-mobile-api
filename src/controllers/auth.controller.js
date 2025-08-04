@@ -4,12 +4,22 @@ const { jsonResponse } = require("../utils/response.handler");
 const ApiError = require("../utils/ApiError");
 
 exports.login = async (req, res, next) => {
-
   try {
     const { email, password } = req.body;
-    const { token, user } = await authService.loginUser(email, password);
+    // Ahora devuelve accessToken, refreshToken y user
+    const data = await authService.loginUser(email, password);
+    jsonResponse(res, 200, data, "Login exitoso");
+  } catch (error) {
+    next(error);
+  }
+};
 
-    jsonResponse(res, 200, { token, user }, "Login exitoso");
+// NUEVA FUNCIÓN
+exports.refresh = async (req, res, next) => {
+  try {
+    const { refreshToken } = req.body;
+    const data = await authService.refreshToken(refreshToken);
+    jsonResponse(res, 200, data, "Token refrescado exitosamente");
   } catch (error) {
     next(error);
   }

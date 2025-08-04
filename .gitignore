@@ -33,3 +33,6 @@ dump/
 
 # Docker
 *.pid
+
+# Text
+*.txt

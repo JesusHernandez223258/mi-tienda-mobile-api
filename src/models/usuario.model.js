@@ -20,6 +20,13 @@ const UsuarioSchema = new mongoose.Schema(
       enum: ["admin", "cliente"],
       default: "cliente",
     },
+    // NUEVO CAMPO: refreshTokens
+    refreshTokens: [
+      {
+        token: String,
+        // Puedes agregar más campos aquí si lo deseas (ej: device, ip, createdAt)
+      },
+    ],
   },
   { timestamps: true }
 );

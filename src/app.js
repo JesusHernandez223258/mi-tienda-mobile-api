@@ -1,13 +1,17 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const cors = require("cors");
-require("dotenv").config(); // Carga las variables de .env
+require("dotenv").config();
+console.log("→ MONGO_URI =", process.env.MONGO_URI);
+
 
 const authRoutes = require("./routes/auth.routes");
 const productoRoutes = require("./routes/producto.routes");
+const syncRoutes = require("./routes/sync.routes");
 // const clienteRoutes = require('./routes/cliente.routes'); // Opcional
 // const pedidoRoutes = require('./routes/pedido.routes');   // Opcional
 const errorHandler = require("./middlewares/errorHandler.middleware");
+
 
 const app = express();
 
@@ -31,6 +35,7 @@ mongoose
 // Rutas de la API
 app.use("/api/v1/auth", authRoutes);
 app.use("/api/v1/productos", productoRoutes);
+app.use("/api/v1/sync", syncRoutes);
 // app.use('/api/v1/clientes', clienteRoutes);
 // app.use('/api/v1/pedidos', pedidoRoutes);
 

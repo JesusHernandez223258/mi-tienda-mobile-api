@@ -76,51 +76,80 @@ exports.deleteProduct = async (id) => {
 };
 
 exports.syncProducts = async (productsFromClient) => {
-  const promises = productsFromClient.map((product) => {
-    // Si el producto tiene un ID, es una actualización.
-    if (product._id) {
-      const id = product._id;
-      delete product._id; // Quitamos el id del objeto para que no intente actualizarlo
-      return Producto.findByIdAndUpdate(id, product, {
-        new: true,
-        runValidators: true,
-        upsert: true,
-      });
-      // upsert: true -> si no encuentra el ID, lo crea.
-    } else {
-      // Si no tiene ID, es una creación.
-      const newProduct = new Producto(product);
-      return newProduct.save();
-    }
-  });
-
-  const settledPromises = await Promise.allSettled(promises);
-
-  // Devolvemos un reporte de qué se creó/actualizó y qué falló.
   const results = {
     successful: [],
     failed: [],
   };
 
-  settledPromises.forEach((result, index) => {
-    const originalProduct = productsFromClient[index];
-    if (result.status === "fulfilled") {
-      results.successful.push({
-        tempId: originalProduct.tempId || null,
-        product: result.value,
-      });
-    } else {
+  // Usamos un bucle for...of para poder usar await dentro
+  for (const clientProduct of productsFromClient) {
+    try {
+      let savedProduct;
+      // El cliente nos envía un ID temporal (ej: "local_123")
+      const { tempId, ...productData } = clientProduct;
+
+      // Si el producto ya tiene un serverId, es una actualización
+      if (productData.serverId) {
+        savedProduct = await Producto.findByIdAndUpdate(
+          productData.serverId,
+          productData,
+          { new: true, runValidators: true }
+        );
+      } else {
+        // Si no, es una creación
+        savedProduct = await new Producto(productData).save();
+      }
+
+      if (savedProduct) {
+        const responseObject = {
+          tempId: tempId,
+          _id: savedProduct._id,
+          nombre: savedProduct.nombre,
+          descripcion: savedProduct.descripcion,
+          precio: savedProduct.precio,
+          stock: savedProduct.stock,
+          imagenUrl: savedProduct.imagenUrl,
+        };
+        results.successful.push(responseObject);
+      } else {
+        // Esto podría pasar si el ID de actualización no se encuentra
+        throw new Error("Producto no encontrado para actualizar.");
+      }
+    } catch (error) {
       results.failed.push({
-        product: originalProduct,
-        reason: result.reason.message,
+        tempId: clientProduct.tempId,
+        reason: error.message,
       });
     }
-  });
-
+  }
   return results;
 };
 
 exports.getAllProductsForSync = async () => {
   // Usamos el método estático definido en el modelo para obtener todos los productos, incluyendo inactivos
   return await Producto.findWithInactive();
+};
+
+// NUEVA FUNCIÓN PARA SYNC DELTA
+exports.getUpdatesSince = async (timestamp) => {
+  // Convertir el timestamp del cliente (en milisegundos) a un objeto Date
+  const sinceDate = new Date(timestamp);
+
+  // Buscamos todos los productos (incluyendo los inactivos/borrados)
+  // que han sido actualizados DESPUÉS de la fecha proporcionada.
+  const updatedProducts = await Producto.findWithInactive({
+    updatedAt: { $gt: sinceDate },
+  });
+
+  // El `timestamp` de respuesta será el del último cambio en el servidor,
+  // o la fecha actual si no hay cambios.
+  const lastUpdate =
+    updatedProducts.length > 0
+      ? Math.max(...updatedProducts.map((p) => new Date(p.updatedAt).getTime()))
+      : Date.now();
+
+  return {
+    products: updatedProducts,
+    serverTimestamp: lastUpdate,
+  };
 };
